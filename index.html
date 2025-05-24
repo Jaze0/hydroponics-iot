@@ -12,19 +12,19 @@
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-database-compat.js"></script>
 </head>
-<body>
+<body class="bg-light">
 
 <!-- Navbar -->
-<nav class="navbar navbar-expand-lg navbar-light bg-light">
+<nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom">
   <div class="container-fluid">
-    <a class="navbar-brand" href="#">Hydroponics</a>
+    <a class="navbar-brand fw-bold" href="#">🌱 Hydroponics</a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
             data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false"
             aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="navbarNav">
-      <ul class="navbar-nav">
+      <ul class="navbar-nav ms-auto">
         <li class="nav-item">
           <a class="nav-link active" href="#" onclick="showSection('dashboard')">Dashboard</a>
         </li>
@@ -41,41 +41,71 @@
 
   <!-- Dashboard Section -->
   <div id="dashboard">
-    <div class="card">
-      <div class="card-body">
-        <h4><strong>Latest Readings</strong></h4>
-        <p><strong>Temperature:</strong> <span id="temp">--</span> °C</p>
-        <p><strong>Humidity:</strong> <span id="humid">--</span> %</p>
-        <p><strong>Moisture:</strong> <span id="moisture">--</span> %</p>
-        <p><strong>Water Level:</strong> <span id="water">--</span> cm</p>
-        <p class="text-muted">Go to "History" for charts of previous data.</p>
+    <h4 class="mb-4">📊 Latest Sensor Readings</h4>
+    <div class="row g-4">
+      <div class="col-md-3">
+        <div class="card text-white bg-primary">
+          <div class="card-body">
+            <h5 class="card-title">🌡️ Temperature</h5>
+            <p class="card-text fs-4" id="temp">-- °C</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card text-white bg-success">
+          <div class="card-body">
+            <h5 class="card-title">💧 Humidity</h5>
+            <p class="card-text fs-4" id="humid">-- %</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card text-white bg-warning">
+          <div class="card-body">
+            <h5 class="card-title">🌱 Moisture</h5>
+            <p class="card-text fs-4" id="moisture">-- %</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card text-white bg-info">
+          <div class="card-body">
+            <h5 class="card-title">🚰 Water Level</h5>
+            <p class="card-text fs-4" id="water">-- cm</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- History Section -->
   <div id="history" style="display: none;">
+    <h4 class="mt-4 mb-3">📈 Historical Data</h4>
+
     <div class="card mb-4">
       <div class="card-body">
-        <h4><strong>Temperature History</strong></h4>
+        <h5>Temperature</h5>
         <canvas id="tempChart"></canvas>
       </div>
     </div>
+
     <div class="card mb-4">
       <div class="card-body">
-        <h4><strong>Humidity History</strong></h4>
+        <h5>Humidity</h5>
         <canvas id="humidChart"></canvas>
       </div>
     </div>
+
     <div class="card mb-4">
       <div class="card-body">
-        <h4><strong>Moisture History</strong></h4>
+        <h5>Moisture</h5>
         <canvas id="moistureChart"></canvas>
       </div>
     </div>
+
     <div class="card mb-4">
       <div class="card-body">
-        <h4><strong>Water Level History</strong></h4>
+        <h5>Water Level</h5>
         <canvas id="waterChart"></canvas>
       </div>
     </div>
@@ -83,20 +113,18 @@
 
 </div>
 
-<!-- Scripts -->
+<!-- Script Section -->
 <script>
-  // ✅ Your Firebase Config
   const firebaseConfig = {
     apiKey: "AIzaSyCR9rxSJCJAexMtZDSZ7CMOpqdUkZXKjX4",
     authDomain: "veryfinal-50987.firebaseapp.com",
     databaseURL: "https://veryfinal-50987-default-rtdb.asia-southeast1.firebasedatabase.app",
     projectId: "veryfinal-50987",
-    storageBucket: "veryfinal-50987.firebasestorage.app",
+    storageBucket: "veryfinal-50987.appspot.com",
     messagingSenderId: "35706928338",
     appId: "1:35706928338:web:ece5d4dcf01cc7a199810b"
   };
 
-  // Initialize Firebase
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
 
@@ -105,31 +133,25 @@
     document.getElementById('history').style.display = section === 'history' ? 'block' : 'none';
   }
 
-  // Fetch latest sensor values
-  async function fetchLatest() {
-    try {
-      const snapshot = await db.ref('latest').get();
-      const data = snapshot.val();
-
-      document.getElementById('temp').innerText = data?.temperature ?? '--';
-      document.getElementById('humid').innerText = data?.humidity ?? '--';
-      document.getElementById('moisture').innerText = data?.soil_moisture ?? '--';
-      document.getElementById('water').innerText = data?.water_level ?? '--';
-    } catch (err) {
-      console.error('Error fetching latest data:', err);
-    }
+  function updateLiveData(data) {
+    document.getElementById('temp').textContent = (data.temperature ?? '--') + ' °C';
+    document.getElementById('humid').textContent = (data.humidity ?? '--') + ' %';
+    document.getElementById('moisture').textContent = (data.soil_moisture ?? '--') + ' %';
+    document.getElementById('water').textContent = (data.water_level ?? '--') + ' cm';
   }
 
-  // Fetch historical data and render chart
+  // Real-time listener
+  db.ref('latest').on('value', snapshot => {
+    const data = snapshot.val();
+    if (data) updateLiveData(data);
+  });
+
+  // Fetch and display historical chart
   async function fetchAndRenderChart(path, canvasId, label, color) {
     try {
       const snapshot = await db.ref('history/' + path).get();
       const data = snapshot.val();
-
-      if (!data || Object.keys(data).length === 0) {
-        console.warn(`No history found for ${label}`);
-        return;
-      }
+      if (!data) return;
 
       const values = Object.values(data);
       const labels = values.map(item => new Date(item.created_at).toLocaleString());
@@ -144,7 +166,7 @@
             label: label,
             data: chartValues,
             borderColor: color,
-            backgroundColor: 'rgba(0,0,0,0)',
+            tension: 0.3,
             fill: false
           }]
         },
@@ -159,23 +181,20 @@
               beginAtZero: true,
               title: { display: true, text: label }
             }
-          },
-          elements: {
-            line: { tension: 0.3 }
           }
         }
       });
     } catch (err) {
-      console.error(`Error fetching history for ${label}:`, err);
+      console.error(`Error loading chart for ${label}:`, err);
     }
   }
 
-  window.onload = async () => {
-    await fetchLatest();
-    await fetchAndRenderChart('temperature', 'tempChart', 'Temperature', 'red');
-    await fetchAndRenderChart('humidity', 'humidChart', 'Humidity', 'blue');
-    await fetchAndRenderChart('soil_moisture', 'moistureChart', 'Moisture', 'orange');
-    await fetchAndRenderChart('water_level', 'waterChart', 'Water Level', 'green');
+  // Load all on start
+  window.onload = () => {
+    fetchAndRenderChart('temperature', 'tempChart', 'Temperature', 'red');
+    fetchAndRenderChart('humidity', 'humidChart', 'Humidity', 'blue');
+    fetchAndRenderChart('soil_moisture', 'moistureChart', 'Moisture', 'orange');
+    fetchAndRenderChart('water_level', 'waterChart', 'Water Level', 'green');
   };
 </script>
 
