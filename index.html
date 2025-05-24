@@ -1,225 +1,186 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Sensor Dashboard</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+  <meta charset="UTF-8">
+  <title>Hydroponics Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.1"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.2.0"></script>
-  <style>
-    body {
-      background-color: #e0f7fa;
-    }
-
-    .navbar {
-      background-color: #00796b;
-    }
-
-    .navbar a {
-      color: white;
-      padding: 10px 15px;
-      font-weight: bold;
-      border-radius: 5px;
-      transition: background-color 0.3s ease;
-    }
-
-    .navbar a:hover {
-      background-color: #004d40;
-    }
-
-    .sensor-card {
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      padding: 1.5rem;
-    }
-
-    .sensor-card h3 {
-      color: #00796b;
-      font-size: 1.1rem;
-    }
-
-    .sensor-card p {
-      color: #555;
-    }
-
-    .dashboard-container {
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      padding: 2rem;
-      margin-top: 1.5rem;
-    }
-
-    .text-muted {
-      color: #9e9e9e;
-    }
-  </style>
-</head>
-<body class="p-6">
-  <!-- Navbar -->
-  <div class="navbar flex justify-between items-center p-4">
-    <div class="text-xl font-bold text-white">Sensor Dashboard</div>
-    <div class="flex space-x-4">
-      <a href="#" id="overview-tab" class="bg-teal-800">Overview</a>
-      <a href="#" id="sensor-data-tab">Sensor Data</a>
-    </div>
-  </div>
-
-  <!-- Overview Section -->
-  <div id="overview-section" class="max-w-6xl mx-auto dashboard-container p-8 mt-6">
-    <h1 class="text-2xl font-semibold text-center mb-6">Sensor Overview</h1>
-    <div id="sensor-overview-content" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      <!-- Cards will be injected -->
-    </div>
-  </div>
-
-  <!-- Sensor Data Section -->
-  <div id="sensor-data-section" class="max-w-6xl mx-auto dashboard-container p-8 mt-6 hidden">
-    <h1 class="text-2xl font-semibold text-center mb-6">Sensor Data Timeline</h1>
-    <div id="sensor-timeline-info" class="mb-6 text-muted text-center"></div>
-    <div id="sensor-charts-container" class="grid grid-cols-1 md:grid-cols-2 gap-8">
-      <!-- Charts will be injected -->
-    </div>
-  </div>
-
   <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-database-compat.js"></script>
+</head>
+<body>
 
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyBelbH4y_QshAkAXh3gSZwR4D_0zZB4JlE",
-      authDomain: "iot-hydro-d5464.firebaseapp.com",
-      databaseURL: "https://iot-hydro-d5464-default-rtdb.firebaseio.com",
-      projectId: "iot-hydro-d5464",
-      storageBucket: "iot-hydro-d5464.appspot.com",
-      messagingSenderId: "385611702191",
-      appId: "1:385611702191:web:1ed53fe09216d50f68595a"
-    };
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="#">Hydroponics</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+            data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false"
+            aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav">
+        <li class="nav-item">
+          <a class="nav-link active" href="#" onclick="showSection('dashboard')">Dashboard</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="#" onclick="showSection('history')">History</a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
 
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+<!-- Main Content -->
+<div class="container mt-4">
 
-    const fetchSensorData = async () => {
-      const snapshot = await db.ref("sensor_data").orderByChild("created_at").limitToLast(10).once("value");
-      const sensorData = snapshot.val();
-
-      if (sensorData) {
-        const dataArr = Object.values(sensorData).reverse();
-        renderOverview(dataArr[0]);
-        renderSensorDataTimeline(dataArr);
-        initializeCharts(dataArr);
-      } else {
-        console.warn("No sensor data available.");
-      }
-    };
-
-    const renderOverview = (data) => {
-      const container = document.getElementById("sensor-overview-content");
-      container.innerHTML = `
-        ${createCard("Temperature (°C)", `${data.temperature}°C`, data.created_at)}
-        ${createCard("Humidity (%)", `${data.humidity}%`, data.created_at)}
-        ${createCard("Soil Moisture (%)", `${data.soil_moisture}%`, data.created_at)}
-        ${createCard("Water Level (%)", `${data.water_level}%`, data.created_at)}
-      `;
-    };
-
-    const createCard = (title, value, timestamp) => `
-      <div class="sensor-card">
-        <h3>${title}</h3>
-        <p class="text-2xl font-bold">${value}</p>
-        <p class="text-sm text-muted">Last updated: ${new Date(timestamp).toLocaleString()}</p>
+  <!-- Dashboard Section -->
+  <div id="dashboard">
+    <div class="card">
+      <div class="card-body">
+        <h4><strong>Latest Readings</strong></h4>
+        <p><strong>Temperature:</strong> <span id="temp">--</span> °C</p>
+        <p><strong>Humidity:</strong> <span id="humid">--</span> %</p>
+        <p><strong>Moisture:</strong> <span id="moisture">--</span> %</p>
+        <p><strong>Water Level:</strong> <span id="water">--</span> cm</p>
+        <p class="text-muted">Go to "History" for charts of previous data.</p>
       </div>
-    `;
+    </div>
+  </div>
 
-    const renderSensorDataTimeline = (dataArr) => {
-      const info = document.getElementById("sensor-timeline-info");
-      const first = new Date(dataArr[dataArr.length - 1].created_at).toLocaleString();
-      const last = new Date(dataArr[0].created_at).toLocaleString();
-      info.innerHTML = `Showing last ${dataArr.length} readings (from ${first} to ${last})`;
-    };
+  <!-- History Section -->
+  <div id="history" style="display: none;">
+    <div class="card mb-4">
+      <div class="card-body">
+        <h4><strong>Temperature History</strong></h4>
+        <canvas id="tempChart"></canvas>
+      </div>
+    </div>
+    <div class="card mb-4">
+      <div class="card-body">
+        <h4><strong>Humidity History</strong></h4>
+        <canvas id="humidChart"></canvas>
+      </div>
+    </div>
+    <div class="card mb-4">
+      <div class="card-body">
+        <h4><strong>Moisture History</strong></h4>
+        <canvas id="moistureChart"></canvas>
+      </div>
+    </div>
+    <div class="card mb-4">
+      <div class="card-body">
+        <h4><strong>Water Level History</strong></h4>
+        <canvas id="waterChart"></canvas>
+      </div>
+    </div>
+  </div>
 
-    const initializeCharts = (dataArr) => {
-      const container = document.getElementById("sensor-charts-container");
-      container.innerHTML = ""; // Clear
+</div>
 
-      const sensors = [
-        { key: "temperature", label: "Temperature (°C)", color: "#FF5733" },
-        { key: "humidity", label: "Humidity (%)", color: "#33FF57" },
-        { key: "soil_moisture", label: "Soil Moisture (%)", color: "#3357FF" },
-        { key: "water_level", label: "Water Level (%)", color: "#FFD700" },
-      ];
+<!-- Scripts -->
+<script>
+  // ✅ Your Firebase Config
+  const firebaseConfig = {
+    apiKey: "AIzaSyCR9rxSJCJAexMtZDSZ7CMOpqdUkZXKjX4",
+    authDomain: "veryfinal-50987.firebaseapp.com",
+    databaseURL: "https://veryfinal-50987-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "veryfinal-50987",
+    storageBucket: "veryfinal-50987.firebasestorage.app",
+    messagingSenderId: "35706928338",
+    appId: "1:35706928338:web:ece5d4dcf01cc7a199810b"
+  };
 
-      sensors.forEach(({ key, label, color }) => {
-        const canvas = document.createElement("canvas");
-        container.appendChild(canvas);
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
 
-        new Chart(canvas, {
-          type: "line",
-          data: {
-            datasets: [{
-              label: label,
-              data: dataArr.map(entry => ({
-                x: new Date(entry.created_at),
-                y: entry[key]
-              })),
-              borderColor: color,
-              backgroundColor: `${color}20`,
-              borderWidth: 2,
-              tension: 0.3,
-              fill: true
-            }]
-          },
-          options: {
-            responsive: true,
-            scales: {
-              x: {
-                type: 'time',
-                time: {
-                  unit: 'minute',
-                  tooltipFormat: 'MMM d, yyyy HH:mm'
-                },
-                title: { display: true, text: 'Time' }
-              },
-              y: {
-                title: { display: true, text: 'Value' },
-                beginAtZero: true
-              }
+  function showSection(section) {
+    document.getElementById('dashboard').style.display = section === 'dashboard' ? 'block' : 'none';
+    document.getElementById('history').style.display = section === 'history' ? 'block' : 'none';
+  }
+
+  // Fetch latest sensor values
+  async function fetchLatest() {
+    try {
+      const snapshot = await db.ref('latest').get();
+      const data = snapshot.val();
+
+      document.getElementById('temp').innerText = data?.temperature ?? '--';
+      document.getElementById('humid').innerText = data?.humidity ?? '--';
+      document.getElementById('moisture').innerText = data?.soil_moisture ?? '--';
+      document.getElementById('water').innerText = data?.water_level ?? '--';
+    } catch (err) {
+      console.error('Error fetching latest data:', err);
+    }
+  }
+
+  // Fetch historical data and render chart
+  async function fetchAndRenderChart(path, canvasId, label, color) {
+    try {
+      const snapshot = await db.ref('history/' + path).get();
+      const data = snapshot.val();
+
+      if (!data || Object.keys(data).length === 0) {
+        console.warn(`No history found for ${label}`);
+        return;
+      }
+
+      const values = Object.values(data);
+      const labels = values.map(item => new Date(item.created_at).toLocaleString());
+      const chartValues = values.map(item => item.value);
+
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: label,
+            data: chartValues,
+            borderColor: color,
+            backgroundColor: 'rgba(0,0,0,0)',
+            fill: false
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: {
+              title: { display: true, text: 'Timestamp' },
+              ticks: { maxTicksLimit: 10, autoSkip: true }
+            },
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: label }
             }
+          },
+          elements: {
+            line: { tension: 0.3 }
           }
-        });
+        }
       });
-    };
+    } catch (err) {
+      console.error(`Error fetching history for ${label}:`, err);
+    }
+  }
 
-    // Tab Navigation
-    const showOverview = () => {
-      document.getElementById("overview-section").classList.remove("hidden");
-      document.getElementById("sensor-data-section").classList.add("hidden");
-      document.getElementById("overview-tab").classList.add("bg-teal-800", "text-white");
-      document.getElementById("sensor-data-tab").classList.remove("bg-teal-800", "text-white");
-    };
+  window.onload = async () => {
+    await fetchLatest();
+    await fetchAndRenderChart('temperature', 'tempChart', 'Temperature', 'red');
+    await fetchAndRenderChart('humidity', 'humidChart', 'Humidity', 'blue');
+    await fetchAndRenderChart('soil_moisture', 'moistureChart', 'Moisture', 'orange');
+    await fetchAndRenderChart('water_level', 'waterChart', 'Water Level', 'green');
+  };
+</script>
 
-    const showSensorData = () => {
-      document.getElementById("sensor-data-section").classList.remove("hidden");
-      document.getElementById("overview-section").classList.add("hidden");
-      document.getElementById("sensor-data-tab").classList.add("bg-teal-800", "text-white");
-      document.getElementById("overview-tab").classList.remove("bg-teal-800", "text-white");
-    };
+<!-- Bootstrap Bundle -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    document.getElementById("overview-tab").addEventListener("click", (e) => {
-      e.preventDefault();
-      showOverview();
-    });
-
-    document.getElementById("sensor-data-tab").addEventListener("click", (e) => {
-      e.preventDefault();
-      showSensorData();
-    });
-
-    fetchSensorData();
-  </script>
 </body>
 </html>
