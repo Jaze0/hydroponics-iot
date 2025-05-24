@@ -4,14 +4,13 @@
   <meta charset="UTF-8" />
   <title>Hydroponics Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
+  
   <!-- Bootstrap 5 CSS -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
   <!-- Firebase SDK (compat version for Realtime Database) -->
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-database-compat.js"></script>
@@ -20,28 +19,16 @@
   <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
     <div class="container-fluid">
       <a class="navbar-brand fw-bold" href="#">Hydroponics</a>
-      <button
-        class="navbar-toggler"
-        type="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#navbarNav"
-        aria-controls="navbarNav"
-        aria-expanded="false"
-        aria-label="Toggle navigation"
-      >
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto">
           <li class="nav-item">
-            <a class="nav-link active" href="#" onclick="showSection('dashboard')"
-              >Dashboard</a
-            >
+            <a class="nav-link active" href="#" onclick="showSection('dashboard')">Dashboard</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="#" onclick="showSection('history')"
-              >History</a
-            >
+            <a class="nav-link" href="#" onclick="showSection('history')">History</a>
           </li>
         </ul>
       </div>
@@ -93,156 +80,110 @@
 
     <div id="history" style="display: none;">
       <h4 class="mt-5 mb-3">Historical Data</h4>
-
-      <div class="card mb-4 shadow-sm">
-        <div class="card-header bg-primary text-white">Temperature</div>
-        <div class="card-body">
-          <canvas id="tempChart" height="100"></canvas>
-        </div>
-      </div>
-
-      <div class="card mb-4 shadow-sm">
-        <div class="card-header bg-success text-white">Humidity</div>
-        <div class="card-body">
-          <canvas id="humidChart" height="100"></canvas>
-        </div>
-      </div>
-
-      <div class="card mb-4 shadow-sm">
-        <div class="card-header bg-warning text-dark">Soil Moisture</div>
-        <div class="card-body">
-          <canvas id="soilChart" height="100"></canvas>
-        </div>
-      </div>
-
-      <div class="card mb-4 shadow-sm">
-        <div class="card-header bg-info text-white">Water Level</div>
-        <div class="card-body">
-          <canvas id="waterChart" height="100"></canvas>
-        </div>
-      </div>
+      <div class="card mb-4 shadow-sm"><div class="card-header bg-primary text-white">Temperature</div><div class="card-body"><canvas id="tempChart" height="100"></canvas></div></div>
+      <div class="card mb-4 shadow-sm"><div class="card-header bg-success text-white">Humidity</div><div class="card-body"><canvas id="humidChart" height="100"></canvas></div></div>
+      <div class="card mb-4 shadow-sm"><div class="card-header bg-warning text-dark">Soil Moisture</div><div class="card-body"><canvas id="soilChart" height="100"></canvas></div></div>
+      <div class="card mb-4 shadow-sm"><div class="card-header bg-info text-white">Water Level</div><div class="card-body"><canvas id="waterChart" height="100"></canvas></div></div>
     </div>
   </div>
 
   <script>
-    // Your Firebase config
+    // Firebase config
     const firebaseConfig = {
-      databaseURL:
-        "https://veryfinal-50987-default-rtdb.asia-southeast1.firebasedatabase.app",
+      databaseURL: "https://veryfinal-50987-default-rtdb.asia-southeast1.firebasedatabase.app"
     };
-
-    // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    // Show/hide sections
     function showSection(section) {
       document.getElementById("dashboard").style.display = section === "dashboard" ? "block" : "none";
       document.getElementById("history").style.display = section === "history" ? "block" : "none";
     }
 
-    // Fetch latest data and update UI
-    function fetchLatest() {
-      database.ref("/sensor/latest").once("value").then((snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          document.getElementById("temp").textContent = data.temperature.toFixed(1) + " °C";
-          document.getElementById("tempDesc").textContent = data.temperature_description || "";
+    function updateDashboard(data) {
+      if (!data) return;
+      document.getElementById("temp").textContent = data.temperature?.toFixed(1) + " °C" || "--";
+      document.getElementById("tempDesc").textContent = data.temperature_description || "";
 
-          document.getElementById("humid").textContent = data.humidity.toFixed(1) + " %";
-          document.getElementById("humDesc").textContent = data.humidity_description || "";
+      document.getElementById("humid").textContent = data.humidity?.toFixed(1) + " %" || "--";
+      document.getElementById("humDesc").textContent = data.humidity_description || "";
 
-          document.getElementById("moisture").textContent = data.soil_moisture + " %";
-          document.getElementById("soilDesc").textContent = data.soil_description || "";
+      document.getElementById("moisture").textContent = data.soil_moisture + " %";
+      document.getElementById("soilDesc").textContent = data.soil_description || "";
 
-          document.getElementById("water").textContent = data.water_level === 1 ? "LOW" : "HIGH";
-          document.getElementById("waterDesc").textContent = data.water_description || "";
+      document.getElementById("water").textContent = data.water_level === 1 ? "LOW" : "HIGH";
+      document.getElementById("waterDesc").textContent = data.water_description || "";
+    }
+
+    function formatTimeLabel(timestamp) {
+      const date = new Date(timestamp * 1000);
+      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+
+    const chartInstances = {};
+
+    function createChart(chartId, label, color) {
+      const ctx = document.getElementById(chartId).getContext("2d");
+      return new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: [],
+          datasets: [{
+            label: label.toUpperCase(),
+            data: [],
+            borderColor: color,
+            backgroundColor: color.replace("0.7", "0.3"),
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { precision: 0 }
+            }
+          }
         }
       });
     }
 
-    // Utility to convert timestamp to readable label
-    function formatTimeLabel(timestamp) {
-      const date = new Date(timestamp * 1000);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
+    function listenToHistory(key, color, chartId) {
+      chartInstances[key] = createChart(chartId, key.replace("_", " "), color);
 
-    // Fetch history data and build charts
-    async function fetchHistory() {
-      const paths = [
-        {key: "temperature", color: "rgba(0, 123, 255, 0.7)", chartId: "tempChart"},
-        {key: "humidity", color: "rgba(40, 167, 69, 0.7)", chartId: "humidChart"},
-        {key: "soil_moisture", color: "rgba(255, 193, 7, 0.7)", chartId: "soilChart"},
-        {key: "water_level", color: "rgba(23, 162, 184, 0.7)", chartId: "waterChart"},
-      ];
+      const ref = database.ref(`/sensor/history/${key}`);
+      ref.on("child_added", (snapshot) => {
+        const entry = snapshot.val();
+        const chart = chartInstances[key];
+        const ts = entry.created_at || parseInt(snapshot.key);
+        const label = formatTimeLabel(ts);
+        const val = key === "water_level" ? entry.value : parseFloat(entry.value);
 
-      for (const {key, color, chartId} of paths) {
-        const snapshot = await database.ref(`/sensor/history/${key}`).once("value");
-        const data = snapshot.val();
-        if (!data) continue;
-
-        // Extract sorted timestamps (keys)
-        const timestamps = Object.keys(data).sort();
-
-        // Prepare arrays
-        const labels = [];
-        const values = [];
-
-        for (const ts of timestamps) {
-          labels.push(formatTimeLabel(data[ts].created_at || 0));
-          if(key === "water_level") {
-            // Show 1 as LOW, 0 as HIGH or numeric 1/0 for charts
-            values.push(data[ts].value);
-          } else {
-            values.push(data[ts].value);
-          }
+        if (chart.data.labels.length >= 20) {
+          chart.data.labels.shift();
+          chart.data.datasets[0].data.shift();
         }
 
-        // Create chart
-        const ctx = document.getElementById(chartId).getContext("2d");
-        new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: labels,
-            datasets: [
-              {
-                label: key.replace("_", " ").toUpperCase(),
-                data: values,
-                borderColor: color,
-                backgroundColor: color.replace("0.7", "0.3"),
-                fill: true,
-                tension: 0.3,
-                pointRadius: 3,
-              },
-            ],
-          },
-          options: {
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: {
-                  precision: 0,
-                },
-              },
-            },
-            plugins: {
-              legend: { display: true },
-            },
-          },
-        });
-      }
+        chart.data.labels.push(label);
+        chart.data.datasets[0].data.push(val);
+        chart.update();
+      });
     }
 
-    // Update latest every 15 seconds
-    fetchLatest();
-    setInterval(fetchLatest, 15000);
+    function initialize() {
+      database.ref("/sensor/latest").on("value", (snapshot) => {
+        updateDashboard(snapshot.val());
+      });
 
-    // Load history charts once at start
-    fetchHistory();
+      listenToHistory("temperature", "rgba(0,123,255,0.7)", "tempChart");
+      listenToHistory("humidity", "rgba(40,167,69,0.7)", "humidChart");
+      listenToHistory("soil_moisture", "rgba(255,193,7,0.7)", "soilChart");
+      listenToHistory("water_level", "rgba(23,162,184,0.7)", "waterChart");
+    }
+
+    initialize();
   </script>
 
-  <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-  ></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
