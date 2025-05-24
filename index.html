@@ -1,192 +1,248 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Hydroponics Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Bootstrap 5 -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
+  <!-- Bootstrap 5 CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Firebase SDK -->
+  <!-- Firebase SDK (compat version for Realtime Database) -->
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-database-compat.js"></script>
 </head>
 <body class="bg-light">
+  <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+    <div class="container-fluid">
+      <a class="navbar-brand fw-bold" href="#">Hydroponics</a>
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarNav"
+        aria-controls="navbarNav"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
+      >
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link active" href="#" onclick="showSection('dashboard')"
+              >Dashboard</a
+            >
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#" onclick="showSection('history')"
+              >History</a
+            >
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
 
-<!-- Navbar -->
-<nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
-  <div class="container-fluid">
-    <a class="navbar-brand fw-bold" href="#">Hydroponics</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-            data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false"
-            aria-label="Toggle navigation">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarNav">
-      <ul class="navbar-nav ms-auto">
-        <li class="nav-item">
-          <a class="nav-link active" href="#" onclick="showSection('dashboard')">Dashboard</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="#" onclick="showSection('history')">History</a>
-        </li>
-      </ul>
+  <div class="container my-4">
+    <div id="dashboard">
+      <h4 class="mb-4">Latest Sensor Readings</h4>
+      <div class="row g-4">
+        <div class="col-md-3">
+          <div class="card shadow-sm border-primary">
+            <div class="card-header bg-primary text-white">🌡 Temperature</div>
+            <div class="card-body">
+              <p class="fs-4 mb-0" id="temp">-- °C</p>
+              <small id="tempDesc" class="text-muted"></small>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card shadow-sm border-success">
+            <div class="card-header bg-success text-white">Humidity</div>
+            <div class="card-body">
+              <p class="fs-4 mb-0" id="humid">-- %</p>
+              <small id="humDesc" class="text-muted"></small>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card shadow-sm border-warning">
+            <div class="card-header bg-warning text-dark">Moisture</div>
+            <div class="card-body">
+              <p class="fs-4 mb-0" id="moisture">-- %</p>
+              <small id="soilDesc" class="text-muted"></small>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card shadow-sm border-info">
+            <div class="card-header bg-info text-white">Water Level</div>
+            <div class="card-body">
+              <p class="fs-4 mb-0" id="water">--</p>
+              <small id="waterDesc" class="text-muted"></small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="history" style="display: none;">
+      <h4 class="mt-5 mb-3">Historical Data</h4>
+
+      <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white">Temperature</div>
+        <div class="card-body">
+          <canvas id="tempChart" height="100"></canvas>
+        </div>
+      </div>
+
+      <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-success text-white">Humidity</div>
+        <div class="card-body">
+          <canvas id="humidChart" height="100"></canvas>
+        </div>
+      </div>
+
+      <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-warning text-dark">Soil Moisture</div>
+        <div class="card-body">
+          <canvas id="soilChart" height="100"></canvas>
+        </div>
+      </div>
+
+      <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-info text-white">Water Level</div>
+        <div class="card-body">
+          <canvas id="waterChart" height="100"></canvas>
+        </div>
+      </div>
     </div>
   </div>
-</nav>
 
-<!-- Main Content -->
-<div class="container my-4">
+  <script>
+    // Your Firebase config
+    const firebaseConfig = {
+      databaseURL:
+        "https://veryfinal-50987-default-rtdb.asia-southeast1.firebasedatabase.app",
+    };
 
-  <!-- Dashboard Section -->
-  <div id="dashboard">
-    <h4 class="mb-4">Latest Sensor Readings</h4>
-    <div class="row g-4">
-      <div class="col-md-3">
-        <div class="card shadow-sm border-primary">
-          <div class="card-header bg-primary text-white">🌡Temperature</div>
-          <div class="card-body">
-            <p class="fs-4 mb-0" id="temp">-- °C</p>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card shadow-sm border-success">
-          <div class="card-header bg-success text-white">Humidity</div>
-          <div class="card-body">
-            <p class="fs-4 mb-0" id="humid">-- %</p>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card shadow-sm border-warning">
-          <div class="card-header bg-warning text-dark">Moisture</div>
-          <div class="card-body">
-            <p class="fs-4 mb-0" id="moisture">-- %</p>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card shadow-sm border-info">
-          <div class="card-header bg-info text-white">Water Level</div>
-          <div class="card-body">
-            <p class="fs-4 mb-0" id="water">-- cm</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
 
-  <!-- History Section -->
-  <div id="history" style="display: none;">
-    <h4 class="mt-5 mb-3">Historical Data</h4>
+    // Show/hide sections
+    function showSection(section) {
+      document.getElementById("dashboard").style.display = section === "dashboard" ? "block" : "none";
+      document.getElementById("history").style.display = section === "history" ? "block" : "none";
+    }
 
-    <div class="card mb-4 shadow-sm">
-      <div class="card-header bg-primary text-white">Temperature</div>
-      <div class="card-body"><canvas id="tempChart"></canvas></div>
-    </div>
+    // Fetch latest data and update UI
+    function fetchLatest() {
+      database.ref("/sensor/latest").once("value").then((snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          document.getElementById("temp").textContent = data.temperature.toFixed(1) + " °C";
+          document.getElementById("tempDesc").textContent = data.temperature_description || "";
 
-    <div class="card mb-4 shadow-sm">
-      <div class="card-header bg-success text-white">Humidity</div>
-      <div class="card-body"><canvas id="humidChart"></canvas></div>
-    </div>
+          document.getElementById("humid").textContent = data.humidity.toFixed(1) + " %";
+          document.getElementById("humDesc").textContent = data.humidity_description || "";
 
-    <div class="card mb-4 shadow-sm">
-      <div class="card-header bg-warning text-dark">Moisture</div>
-      <div class="card-body"><canvas id="moistureChart"></canvas></div>
-    </div>
+          document.getElementById("moisture").textContent = data.soil_moisture + " %";
+          document.getElementById("soilDesc").textContent = data.soil_description || "";
 
-    <div class="card mb-4 shadow-sm">
-      <div class="card-header bg-info text-white">Water Level</div>
-      <div class="card-body"><canvas id="waterChart"></canvas></div>
-    </div>
-  </div>
-</div>
-
-<!-- Scripts -->
-<script>
-  // Firebase config
-  const firebaseConfig = {
-    apiKey: "AIzaSyCR9rxSJCJAexMtZDSZ7CMOpqdUkZXKjX4",
-    authDomain: "veryfinal-50987.firebaseapp.com",
-    databaseURL: "https://veryfinal-50987-default-rtdb.asia-southeast1.firebasedatabase.app/",
-    projectId: "veryfinal-50987",
-    storageBucket: "veryfinal-50987.appspot.com",
-    messagingSenderId: "35706928338",
-    appId: "1:35706928338:web:ece5d4dcf01cc7a199810b"
-  };
-
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
-
-  function showSection(section) {
-    document.getElementById('dashboard').style.display = section === 'dashboard' ? 'block' : 'none';
-    document.getElementById('history').style.display = section === 'history' ? 'block' : 'none';
-  }
-
-  function updateLiveData(data) {
-    document.getElementById('temp').textContent = (data.temperature ?? '--') + ' °C';
-    document.getElementById('humid').textContent = (data.humidity ?? '--') + ' %';
-    document.getElementById('moisture').textContent = (data.soil_moisture ?? '--') + ' %';
-    document.getElementById('water').textContent = (data.water_level ?? '--') + ' cm';
-  }
-
-  // Real-time latest data
-  db.ref('latest').on('value', snapshot => {
-    const data = snapshot.val();
-    if (data) updateLiveData(data);
-  });
-
-  // History chart
-  async function fetchAndRenderChart(sensorType, canvasId, label, color) {
-    const snapshot = await db.ref('history/' + sensorType).get();
-    const data = snapshot.val();
-    if (!data) return;
-
-    const entries = Object.values(data).filter(d => d.created_at && d.value !== undefined);
-    const labels = entries.map(d => {
-      const ts = typeof d.created_at === 'string' && !isNaN(d.created_at)
-        ? parseInt(d.created_at) : d.created_at;
-      return new Date(ts).toLocaleString();
-    });
-    const values = entries.map(d => d.value);
-
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [{
-          label: label,
-          data: values,
-          borderColor: color,
-          fill: false,
-          tension: 0.3
-        }]
-      },
-      options: {
-        responsive: true,
-        scales: {
-          x: { title: { display: true, text: 'Date/Time' } },
-          y: { beginAtZero: true, title: { display: true, text: label } }
+          document.getElementById("water").textContent = data.water_level === 1 ? "LOW" : "HIGH";
+          document.getElementById("waterDesc").textContent = data.water_description || "";
         }
+      });
+    }
+
+    // Utility to convert timestamp to readable label
+    function formatTimeLabel(timestamp) {
+      const date = new Date(timestamp * 1000);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Fetch history data and build charts
+    async function fetchHistory() {
+      const paths = [
+        {key: "temperature", color: "rgba(0, 123, 255, 0.7)", chartId: "tempChart"},
+        {key: "humidity", color: "rgba(40, 167, 69, 0.7)", chartId: "humidChart"},
+        {key: "soil_moisture", color: "rgba(255, 193, 7, 0.7)", chartId: "soilChart"},
+        {key: "water_level", color: "rgba(23, 162, 184, 0.7)", chartId: "waterChart"},
+      ];
+
+      for (const {key, color, chartId} of paths) {
+        const snapshot = await database.ref(`/sensor/history/${key}`).once("value");
+        const data = snapshot.val();
+        if (!data) continue;
+
+        // Extract sorted timestamps (keys)
+        const timestamps = Object.keys(data).sort();
+
+        // Prepare arrays
+        const labels = [];
+        const values = [];
+
+        for (const ts of timestamps) {
+          labels.push(formatTimeLabel(data[ts].created_at || 0));
+          if(key === "water_level") {
+            // Show 1 as LOW, 0 as HIGH or numeric 1/0 for charts
+            values.push(data[ts].value);
+          } else {
+            values.push(data[ts].value);
+          }
+        }
+
+        // Create chart
+        const ctx = document.getElementById(chartId).getContext("2d");
+        new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: key.replace("_", " ").toUpperCase(),
+                data: values,
+                borderColor: color,
+                backgroundColor: color.replace("0.7", "0.3"),
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3,
+              },
+            ],
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  precision: 0,
+                },
+              },
+            },
+            plugins: {
+              legend: { display: true },
+            },
+          },
+        });
       }
-    });
-  }
+    }
 
-  window.onload = () => {
-    fetchAndRenderChart('temperature', 'tempChart', 'Temperature', 'red');
-    fetchAndRenderChart('humidity', 'humidChart', 'Humidity', 'blue');
-    fetchAndRenderChart('soil_moisture', 'moistureChart', 'Moisture', 'orange');
-    fetchAndRenderChart('water_level', 'waterChart', 'Water Level', 'green');
-  };
-</script>
+    // Update latest every 15 seconds
+    fetchLatest();
+    setInterval(fetchLatest, 15000);
 
-<!-- Bootstrap Bundle -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    // Load history charts once at start
+    fetchHistory();
+  </script>
 
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+  ></script>
 </body>
 </html>
