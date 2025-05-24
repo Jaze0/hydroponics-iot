@@ -4,16 +4,120 @@
   <meta charset="UTF-8" />
   <title>Hydroponics Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  
   <!-- Bootstrap 5 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  
-  <!-- Firebase SDK (compat version for Realtime Database) -->
-  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-database-compat.js"></script>
+  <!-- Firebase Modular SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCR9rxSJCJAexMtZDSZ7CMOpqdUkZXKjX4",
+      authDomain: "veryfinal-50987.firebaseapp.com",
+      databaseURL: "https://veryfinal-50987-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "veryfinal-50987",
+      storageBucket: "veryfinal-50987.appspot.com",
+      messagingSenderId: "35706928338",
+      appId: "1:35706928338:web:ece5d4dcf01cc7a199810b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
+
+    function showSection(section) {
+      document.getElementById("dashboard").style.display = section === "dashboard" ? "block" : "none";
+      document.getElementById("history").style.display = section === "history" ? "block" : "none";
+    }
+
+    function fetchLatest() {
+      const dbRef = ref(database);
+      get(child(dbRef, "sensor/latest")).then((snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          document.getElementById("temp").textContent = data.temperature?.toFixed(1) + " °C";
+          document.getElementById("tempDesc").textContent = data.temperature_description || "";
+
+          document.getElementById("humid").textContent = data.humidity?.toFixed(1) + " %";
+          document.getElementById("humDesc").textContent = data.humidity_description || "";
+
+          document.getElementById("moisture").textContent = data.soil_moisture + " %";
+          document.getElementById("soilDesc").textContent = data.soil_description || "";
+
+          document.getElementById("water").textContent = data.water_level === 1 ? "LOW" : "HIGH";
+          document.getElementById("waterDesc").textContent = data.water_description || "";
+        }
+      }).catch(console.error);
+    }
+
+    function formatTimeLabel(timestamp) {
+      const date = new Date(timestamp * 1000);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    async function fetchHistory() {
+      const dbRef = ref(database);
+      const paths = [
+        { key: "temperature", color: "rgba(0, 123, 255, 0.7)", chartId: "tempChart" },
+        { key: "humidity", color: "rgba(40, 167, 69, 0.7)", chartId: "humidChart" },
+        { key: "soil_moisture", color: "rgba(255, 193, 7, 0.7)", chartId: "soilChart" },
+        { key: "water_level", color: "rgba(23, 162, 184, 0.7)", chartId: "waterChart" },
+      ];
+
+      for (const { key, color, chartId } of paths) {
+        try {
+          const snapshot = await get(child(dbRef, `sensor/history/${key}`));
+          const data = snapshot.val();
+          if (!data) continue;
+
+          const timestamps = Object.keys(data).sort();
+          const labels = [];
+          const values = [];
+
+          for (const ts of timestamps) {
+            const record = data[ts];
+            labels.push(formatTimeLabel(record.created_at || 0));
+            values.push(record.value);
+          }
+
+          const ctx = document.getElementById(chartId).getContext("2d");
+          new Chart(ctx, {
+            type: "line",
+            data: {
+              labels,
+              datasets: [{
+                label: key.replace("_", " ").toUpperCase(),
+                data: values,
+                borderColor: color,
+                backgroundColor: color.replace("0.7", "0.3"),
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3,
+              }],
+            },
+            options: {
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  ticks: { precision: 0 },
+                },
+              },
+              plugins: {
+                legend: { display: true },
+              },
+            },
+          });
+        } catch (error) {
+          console.error(`Error loading history for ${key}:`, error);
+        }
+      }
+    }
+
+    fetchLatest();
+    setInterval(fetchLatest, 15000);
+    fetchHistory();
+  </script>
 </head>
 <body class="bg-light">
   <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
@@ -41,7 +145,7 @@
       <div class="row g-4">
         <div class="col-md-3">
           <div class="card shadow-sm border-primary">
-            <div class="card-header bg-primary text-white">🌡 Temperature</div>
+            <div class="card-header bg-primary text-white">Temperature</div>
             <div class="card-body">
               <p class="fs-4 mb-0" id="temp">-- °C</p>
               <small id="tempDesc" class="text-muted"></small>
@@ -80,110 +184,27 @@
 
     <div id="history" style="display: none;">
       <h4 class="mt-5 mb-3">Historical Data</h4>
-      <div class="card mb-4 shadow-sm"><div class="card-header bg-primary text-white">Temperature</div><div class="card-body"><canvas id="tempChart" height="100"></canvas></div></div>
-      <div class="card mb-4 shadow-sm"><div class="card-header bg-success text-white">Humidity</div><div class="card-body"><canvas id="humidChart" height="100"></canvas></div></div>
-      <div class="card mb-4 shadow-sm"><div class="card-header bg-warning text-dark">Soil Moisture</div><div class="card-body"><canvas id="soilChart" height="100"></canvas></div></div>
-      <div class="card mb-4 shadow-sm"><div class="card-header bg-info text-white">Water Level</div><div class="card-body"><canvas id="waterChart" height="100"></canvas></div></div>
+
+      <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white">Temperature</div>
+        <div class="card-body"><canvas id="tempChart" height="100"></canvas></div>
+      </div>
+      <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-success text-white">Humidity</div>
+        <div class="card-body"><canvas id="humidChart" height="100"></canvas></div>
+      </div>
+      <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-warning text-dark">Soil Moisture</div>
+        <div class="card-body"><canvas id="soilChart" height="100"></canvas></div>
+      </div>
+      <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-info text-white">Water Level</div>
+        <div class="card-body"><canvas id="waterChart" height="100"></canvas></div>
+      </div>
     </div>
   </div>
 
-  <script>
-    // Firebase config
-    const firebaseConfig = {
-      databaseURL: "https://veryfinal-50987-default-rtdb.asia-southeast1.firebasedatabase.app"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
-
-    function showSection(section) {
-      document.getElementById("dashboard").style.display = section === "dashboard" ? "block" : "none";
-      document.getElementById("history").style.display = section === "history" ? "block" : "none";
-    }
-
-    function updateDashboard(data) {
-      if (!data) return;
-      document.getElementById("temp").textContent = data.temperature?.toFixed(1) + " °C" || "--";
-      document.getElementById("tempDesc").textContent = data.temperature_description || "";
-
-      document.getElementById("humid").textContent = data.humidity?.toFixed(1) + " %" || "--";
-      document.getElementById("humDesc").textContent = data.humidity_description || "";
-
-      document.getElementById("moisture").textContent = data.soil_moisture + " %";
-      document.getElementById("soilDesc").textContent = data.soil_description || "";
-
-      document.getElementById("water").textContent = data.water_level === 1 ? "LOW" : "HIGH";
-      document.getElementById("waterDesc").textContent = data.water_description || "";
-    }
-
-    function formatTimeLabel(timestamp) {
-      const date = new Date(timestamp * 1000);
-      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    }
-
-    const chartInstances = {};
-
-    function createChart(chartId, label, color) {
-      const ctx = document.getElementById(chartId).getContext("2d");
-      return new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: [],
-          datasets: [{
-            label: label.toUpperCase(),
-            data: [],
-            borderColor: color,
-            backgroundColor: color.replace("0.7", "0.3"),
-            fill: true,
-            tension: 0.3
-          }]
-        },
-        options: {
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: { precision: 0 }
-            }
-          }
-        }
-      });
-    }
-
-    function listenToHistory(key, color, chartId) {
-      chartInstances[key] = createChart(chartId, key.replace("_", " "), color);
-
-      const ref = database.ref(`/sensor/history/${key}`);
-      ref.on("child_added", (snapshot) => {
-        const entry = snapshot.val();
-        const chart = chartInstances[key];
-        const ts = entry.created_at || parseInt(snapshot.key);
-        const label = formatTimeLabel(ts);
-        const val = key === "water_level" ? entry.value : parseFloat(entry.value);
-
-        if (chart.data.labels.length >= 20) {
-          chart.data.labels.shift();
-          chart.data.datasets[0].data.shift();
-        }
-
-        chart.data.labels.push(label);
-        chart.data.datasets[0].data.push(val);
-        chart.update();
-      });
-    }
-
-    function initialize() {
-      database.ref("/sensor/latest").on("value", (snapshot) => {
-        updateDashboard(snapshot.val());
-      });
-
-      listenToHistory("temperature", "rgba(0,123,255,0.7)", "tempChart");
-      listenToHistory("humidity", "rgba(40,167,69,0.7)", "humidChart");
-      listenToHistory("soil_moisture", "rgba(255,193,7,0.7)", "soilChart");
-      listenToHistory("water_level", "rgba(23,162,184,0.7)", "waterChart");
-    }
-
-    initialize();
-  </script>
-
+  <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
