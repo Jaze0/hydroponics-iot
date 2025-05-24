@@ -15,9 +15,9 @@
 <body class="bg-light">
 
 <!-- Navbar -->
-<nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom">
+<nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
   <div class="container-fluid">
-    <a class="navbar-brand fw-bold" href="#">🌱 Hydroponics</a>
+    <a class="navbar-brand fw-bold" href="#">Hydroponics</a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
             data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false"
             aria-label="Toggle navigation">
@@ -37,41 +37,41 @@
 </nav>
 
 <!-- Main Content -->
-<div class="container mt-4">
+<div class="container my-4">
 
   <!-- Dashboard Section -->
   <div id="dashboard">
-    <h4 class="mb-4">📊 Latest Sensor Readings</h4>
+    <h4 class="mb-4">Latest Sensor Readings</h4>
     <div class="row g-4">
       <div class="col-md-3">
-        <div class="card text-white bg-primary">
+        <div class="card shadow-sm border-primary">
+          <div class="card-header bg-primary text-white">🌡Temperature</div>
           <div class="card-body">
-            <h5 class="card-title">🌡️ Temperature</h5>
-            <p class="card-text fs-4" id="temp">-- °C</p>
+            <p class="fs-4 mb-0" id="temp">-- °C</p>
           </div>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card text-white bg-success">
+        <div class="card shadow-sm border-success">
+          <div class="card-header bg-success text-white">Humidity</div>
           <div class="card-body">
-            <h5 class="card-title">💧 Humidity</h5>
-            <p class="card-text fs-4" id="humid">-- %</p>
+            <p class="fs-4 mb-0" id="humid">-- %</p>
           </div>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card text-white bg-warning">
+        <div class="card shadow-sm border-warning">
+          <div class="card-header bg-warning text-dark">Moisture</div>
           <div class="card-body">
-            <h5 class="card-title">🌱 Moisture</h5>
-            <p class="card-text fs-4" id="moisture">-- %</p>
+            <p class="fs-4 mb-0" id="moisture">-- %</p>
           </div>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card text-white bg-info">
+        <div class="card shadow-sm border-info">
+          <div class="card-header bg-info text-white">Water Level</div>
           <div class="card-body">
-            <h5 class="card-title">🚰 Water Level</h5>
-            <p class="card-text fs-4" id="water">-- cm</p>
+            <p class="fs-4 mb-0" id="water">-- cm</p>
           </div>
         </div>
       </div>
@@ -80,41 +80,33 @@
 
   <!-- History Section -->
   <div id="history" style="display: none;">
-    <h4 class="mt-4 mb-3">📈 Historical Data</h4>
+    <h4 class="mt-5 mb-3">Historical Data</h4>
 
-    <div class="card mb-4">
-      <div class="card-body">
-        <h5>Temperature</h5>
-        <canvas id="tempChart"></canvas>
-      </div>
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header bg-primary text-white">Temperature</div>
+      <div class="card-body"><canvas id="tempChart"></canvas></div>
     </div>
 
-    <div class="card mb-4">
-      <div class="card-body">
-        <h5>Humidity</h5>
-        <canvas id="humidChart"></canvas>
-      </div>
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header bg-success text-white">Humidity</div>
+      <div class="card-body"><canvas id="humidChart"></canvas></div>
     </div>
 
-    <div class="card mb-4">
-      <div class="card-body">
-        <h5>Moisture</h5>
-        <canvas id="moistureChart"></canvas>
-      </div>
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header bg-warning text-dark">Moisture</div>
+      <div class="card-body"><canvas id="moistureChart"></canvas></div>
     </div>
 
-    <div class="card mb-4">
-      <div class="card-body">
-        <h5>Water Level</h5>
-        <canvas id="waterChart"></canvas>
-      </div>
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header bg-info text-white">Water Level</div>
+      <div class="card-body"><canvas id="waterChart"></canvas></div>
     </div>
   </div>
-
 </div>
 
-<!-- Script Section -->
+<!-- Scripts -->
 <script>
+  // Firebase config
   const firebaseConfig = {
     apiKey: "AIzaSyCR9rxSJCJAexMtZDSZ7CMOpqdUkZXKjX4",
     authDomain: "veryfinal-50987.firebaseapp.com",
@@ -140,56 +132,49 @@
     document.getElementById('water').textContent = (data.water_level ?? '--') + ' cm';
   }
 
-  // Real-time listener
+  // Real-time latest data
   db.ref('latest').on('value', snapshot => {
     const data = snapshot.val();
     if (data) updateLiveData(data);
   });
 
-  // Fetch and display historical chart
-  async function fetchAndRenderChart(path, canvasId, label, color) {
-    try {
-      const snapshot = await db.ref('history/' + path).get();
-      const data = snapshot.val();
-      if (!data) return;
+  // History chart
+  async function fetchAndRenderChart(sensorType, canvasId, label, color) {
+    const snapshot = await db.ref('history/' + sensorType).get();
+    const data = snapshot.val();
+    if (!data) return;
 
-      const values = Object.values(data);
-      const labels = values.map(item => new Date(item.created_at).toLocaleString());
-      const chartValues = values.map(item => item.value);
+    const entries = Object.values(data).filter(d => d.created_at && d.value !== undefined);
+    const labels = entries.map(d => {
+      const ts = typeof d.created_at === 'string' && !isNaN(d.created_at)
+        ? parseInt(d.created_at) : d.created_at;
+      return new Date(ts).toLocaleString();
+    });
+    const values = entries.map(d => d.value);
 
-      const ctx = document.getElementById(canvasId).getContext('2d');
-      new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels,
-          datasets: [{
-            label: label,
-            data: chartValues,
-            borderColor: color,
-            tension: 0.3,
-            fill: false
-          }]
-        },
-        options: {
-          responsive: true,
-          scales: {
-            x: {
-              title: { display: true, text: 'Timestamp' },
-              ticks: { maxTicksLimit: 10, autoSkip: true }
-            },
-            y: {
-              beginAtZero: true,
-              title: { display: true, text: label }
-            }
-          }
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: label,
+          data: values,
+          borderColor: color,
+          fill: false,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { title: { display: true, text: 'Date/Time' } },
+          y: { beginAtZero: true, title: { display: true, text: label } }
         }
-      });
-    } catch (err) {
-      console.error(`Error loading chart for ${label}:`, err);
-    }
+      }
+    });
   }
 
-  // Load all on start
   window.onload = () => {
     fetchAndRenderChart('temperature', 'tempChart', 'Temperature', 'red');
     fetchAndRenderChart('humidity', 'humidChart', 'Humidity', 'blue');
