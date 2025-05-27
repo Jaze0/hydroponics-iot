@@ -95,7 +95,6 @@
     .bg-warning {
       background-color: var(--warning-color) !important;
     }
-    
     .bg-info {
       background-color: var(--info-color) !important;
     }
@@ -235,14 +234,17 @@
     };
     const app = initializeApp(firebaseConfig);
     const database = getDatabase(app);
+    
     // Store chart instances so we can destroy if needed (avoid duplicates)
     let charts = {};
+    
     function showSection(section) {
       // Show/hide sections
       document.getElementById("dashboard").style.display = section === "dashboard" ? "block" : "none";
       document.getElementById("history").style.display = section === "history" ? "block" : "none";
       document.getElementById("about-us").style.display = section === "about-us" ? "block" : "none";
       document.getElementById("developers").style.display = section === "developers" ? "block" : "none";
+      
       // Update navbar active classes
       document.querySelectorAll(".nav-link").forEach(link => {
         link.classList.remove("active");
@@ -250,68 +252,84 @@
           link.classList.add("active");
         }
       });
+      
       // If history tab is shown, (re)draw charts
       if (section === "history") {
         fetchHistory();
       }
     }
+    
     function fetchLatest() {
       const dbRef = ref(database);
       get(child(dbRef, "sensor/latest")).then((snapshot) => {
         const data = snapshot.val();
         if (data) {
+          // Temperature display
           document.getElementById("temp").textContent = data.temperature?.toFixed(1) + " °C";
-          document.getElementById("tempDesc").textContent = data.temperature_description || "";
-
+          document.getElementById("tempDesc").textContent = data.temperature_description || "Warm"; // Default to "Warm" if not provided
+          
+          // Humidity display
           document.getElementById("humid").textContent = data.humidity?.toFixed(1) + " %";
-          document.getElementById("humDesc").textContent = data.humidity_description || "";
-
+          document.getElementById("humDesc").textContent = data.humidity_description || "Heavy Air"; // Default to "Heavy Air" if not provided
+          
+          // Soil Moisture display (0-50% range from Arduino)
           document.getElementById("moisture").textContent = data.soil_moisture + " %";
-          document.getElementById("soilDesc").textContent = data.soil_description || "";
-
-          document.getElementById("water").textContent = data.water_level === 1 ? "LOW" : "HIGH";
-          document.getElementById("waterDesc").textContent = data.water_description || "";
+          document.getElementById("soilDesc").textContent = data.soil_status || "Very Dry"; // Default to "Very Dry" if not provided
+          
+          // Water Level display (matches Arduino output directly)
+          document.getElementById("water").textContent = data.water_level || "--";
+          document.getElementById("waterDesc").textContent = data.water_description || "Water level is " + (data.water_level || "--");
         }
       }).catch(console.error);
     }
+    
     function formatTimeLabel(timestamp) {
       const date = new Date(timestamp * 1000);
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
+    
     async function fetchHistory() {
       const dbRef = ref(database);
       const paths = [
-        { key: "temperature", color: "rgba(78, 115, 223, 0.7)", chartId: "tempChart" },
-        { key: "humidity", color: "rgba(28, 200, 138, 0.7)", chartId: "humidChart" },
-        { key: "soil_moisture", color: "rgba(246, 194, 62, 0.7)", chartId: "soilChart" },
-        { key: "water_level", color: "rgba(54, 185, 204, 0.7)", chartId: "waterChart" },
+        { key: "temperature", color: "rgba(78, 115, 223, 0.7)", chartId: "tempChart", unit: "°C" },
+        { key: "humidity", color: "rgba(28, 200, 138, 0.7)", chartId: "humidChart", unit: "%" },
+        { key: "soil_moisture", color: "rgba(246, 194, 62, 0.7)", chartId: "soilChart", unit: "%" },
       ];
-      for (const { key, color, chartId } of paths) {
+      
+      for (const { key, color, chartId, unit } of paths) {
         try {
-          const snapshot = await get(child(dbRef, `sensor/history/${key}`));
+          const snapshot = await get(child(dbRef, `sensor/history`));
           const data = snapshot.val();
           if (!data) continue;
+          
+          // Get all timestamps and sort them
           let timestamps = Object.keys(data).sort();
-          // Take only the last 10 timestamps (or fewer if not enough data)
+          // Take only the last 10 timestamps
           timestamps = timestamps.slice(-10);
+          
           const labels = [];
           const values = [];
+          
           for (const ts of timestamps) {
             const record = data[ts];
-            labels.push(formatTimeLabel(record.created_at || 0));
-            values.push(record.value);
+            if (record && record[key] !== undefined) {
+              labels.push(formatTimeLabel(parseInt(ts)));
+              values.push(record[key]);
+            }
           }
+          
           const ctx = document.getElementById(chartId).getContext("2d");
           // Destroy old chart if exists to prevent duplicates
           if (charts[chartId]) {
             charts[chartId].destroy();
           }
+          
           charts[chartId] = new Chart(ctx, {
             type: "line",
             data: {
               labels,
               datasets: [{
-                label: key.replace("_", " ").toUpperCase(),
+                label: `${key.replace("_", " ").toUpperCase()} (${unit})`,
                 data: values,
                 borderColor: color,
                 backgroundColor: color.replace("0.7", "0.1"),
@@ -327,7 +345,7 @@
               maintainAspectRatio: false,
               scales: {
                 y: {
-                  beginAtZero: true,
+                  beginAtZero: key !== "temperature", // Don't start at zero for temperature
                   ticks: { 
                     precision: 0,
                     font: {
@@ -393,7 +411,123 @@
           console.error(`Error loading history for ${key}:`, error);
         }
       }
+      
+      // Special handling for water level (binary data)
+      try {
+        const snapshot = await get(child(dbRef, `sensor/history`));
+        const data = snapshot.val();
+        if (data) {
+          let timestamps = Object.keys(data).sort().slice(-10);
+          const labels = [];
+          const values = [];
+          
+          for (const ts of timestamps) {
+            const record = data[ts];
+            if (record && record.water_level !== undefined) {
+              labels.push(formatTimeLabel(parseInt(ts)));
+              // Convert "HIGH"/"LOW" to 1/0 for charting
+              values.push(record.water_level === "HIGH" ? 1 : 0);
+            }
+          }
+          
+          const ctx = document.getElementById("waterChart").getContext("2d");
+          if (charts["waterChart"]) {
+            charts["waterChart"].destroy();
+          }
+          
+          charts["waterChart"] = new Chart(ctx, {
+            type: "line",
+            data: {
+              labels,
+              datasets: [{
+                label: "WATER LEVEL (1=HIGH, 0=LOW)",
+                data: values,
+                borderColor: "rgba(54, 185, 204, 0.7)",
+                backgroundColor: "rgba(54, 185, 204, 0.1)",
+                fill: true,
+                tension: 0.1,
+                pointRadius: 4,
+                borderWidth: 2
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                y: {
+                  min: -0.5,
+                  max: 1.5,
+                  ticks: {
+                    stepSize: 1,
+                    callback: function(value) {
+                      return value === 1 ? "HIGH" : value === 0 ? "LOW" : "";
+                    },
+                    font: {
+                      family: 'Poppins',
+                      size: 12
+                    }
+                  },
+                  grid: {
+                    color: 'rgba(0, 0, 0, 0.05)',
+                    drawBorder: false
+                  }
+                },
+                x: {
+                  ticks: {
+                    font: {
+                      family: 'Poppins',
+                      size: 12
+                    }
+                  },
+                  grid: {
+                    display: false
+                  }
+                }
+              },
+              plugins: {
+                legend: { 
+                  display: true,
+                  labels: {
+                    font: {
+                      family: 'Poppins',
+                      size: 13,
+                      weight: '500'
+                    },
+                    boxWidth: 12,
+                    boxHeight: 12,
+                    padding: 20,
+                    usePointStyle: true
+                  }
+                },
+                tooltip: {
+                  callbacks: {
+                    label: function(context) {
+                      return context.parsed.y === 1 ? "HIGH" : "LOW";
+                    }
+                  },
+                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                  titleFont: {
+                    family: 'Poppins',
+                    size: 12,
+                    weight: '500'
+                  },
+                  bodyFont: {
+                    family: 'Poppins',
+                    size: 12
+                  },
+                  padding: 10,
+                  cornerRadius: 6,
+                  displayColors: false
+                }
+              }
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Error loading water level history:", error);
+      }
     }
+    
     // Initial fetch and interval
     fetchLatest();
     setInterval(fetchLatest, 15000);
@@ -535,166 +669,6 @@
           </div>
         </div>
 
-        <!-- 1. List of Materials and Costing -->
-        <div class="mb-5">
-          <h4 class="mb-4"><i class="fas fa-list-alt me-2"></i>List of Materials and Costing</h4>
-          <div class="table-responsive">
-            <table class="table table-bordered table-hover">
-              <thead class="table-primary">
-                <tr>
-                  <th>Item/Component</th>
-                  <th>Quantity</th>
-                  <th>Unit Cost</th>
-                  <th>Total Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>ESP32 Microcontroller</td>
-                  <td>1</td>
-                  <td>₱170</td>
-                  <td>₱170</td>
-                </tr>
-                <tr>
-                  <td>DHT22 Temperature/Humidity Sensor</td>
-                  <td>1</td>
-                  <td>₱195</td>
-                  <td>₱195</td>
-                </tr>
-                <tr>
-                  <td>Soil Moisture Sensor</td>
-                  <td>1</td>
-                  <td>₱95</td>
-                  <td>₱95</td>
-                </tr>
-                <tr>
-                  <td>Water Level Sensor</td>
-                  <td>1</td>
-                  <td>₱199</td>
-                  <td>₱199</td>
-                </tr>
-                <tr>
-                  <td>BreadBoard</td>
-                  <td>1</td>
-                  <td>₱85</td>
-                  <td>₱85</td>
-                </tr>
-                <tr>
-                  <td>Jumper Wires</td>
-                  <td>120 pcs</td>
-                  <td>₱124</td>
-                  <td>₱124</td>
-                </tr>
-                <tr class="table-success">
-                  <td colspan="3" class="text-end fw-bold">Total:</td>
-                  <td class="fw-bold">₱868</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- 2. Labeled Image of the IoT Hardware -->
-        <div class="mb-5">
-          <h4 class="mb-4"><i class="fas fa-microchip me-2"></i>Hardware Setup</h4>
-          <div class="text-center">
-            <img src="/images/hardware-labeled.jpg" alt="Labeled Hardware Setup" class="img-fluid rounded" style="max-height: 500px;">
-            <p class="mt-2 text-muted">Figure 1: Labeled diagram of our hydroponics monitoring hardware components</p>
-          </div>
-        </div>
-
-        <!-- 3. List of Components and Their Functions -->
-        <div class="mb-5">
-          <h4 class="mb-4"><i class="fas fa-tasks me-2"></i>Component Functions</h4>
-          <div class="table-responsive">
-            <table class="table table-bordered table-hover">
-              <thead class="table-info">
-                <tr>
-                  <th>Component</th>
-                  <th>Function/Use</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><strong>ESP32</strong></td>
-                  <td>Main microcontroller that reads sensor data, connects to Wi-Fi, sends data to Firebase, and enters deep sleep mode to conserve power.</td>
-                </tr>
-                <tr>  
-                  <td><strong>DHT22 Sensor</strong></td>
-                  <td>Measures ambient temperature and humidity. Data is used for environmental monitoring and analysis.</td>
-                </tr>
-                <tr>
-                  <td><strong>Capacitive Soil Moisture Sensor (Analog)</strong></td>
-                  <td>Reads soil moisture levels via analog input. The values are calibrated to determine dryness or wetness for plant hydration status.</td>
-                </tr>
-                <tr>
-                  <td><strong>Water Level Float Switch (Digital)</strong></td>
-                  <td>Detects whether the water level in the tank is LOW or HIGH using a simple float mechanism and digital input pin.</td>
-                </tr>
-                <tr>
-                  <td><strong>Firebase Realtime Database</strong></td>
-                  <td>Stores both the latest and historical sensor data. Enables remote monitoring via web or mobile dashboards.</td>
-                </tr>
-                <tr>
-                  <td><strong>Wi-Fi (ESP32 built-in)</strong></td>
-                  <td>Used to connect the ESP32 to the internet and send sensor readings to Firebase.</td>
-                </tr>
-                <tr>
-                  <td><strong>Deep Sleep Mode</strong></td>
-                  <td>Reduces power consumption by putting ESP32 into low-power mode for 5 minutes between sensor readings.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- 4. User Interface Screenshots with Explanation -->
-        <div class="mb-5">
-          <h4 class="mb-4"><i class="fas fa-desktop me-2"></i>User Interface</h4>
-          
-          <div class="row g-4 mb-4">
-            <div class="col-md-6">
-              <div class="card">
-                <img src="/images/dashboard-screenshot.jpg" class="card-img-top" alt="Dashboard Screenshot">
-                <div class="card-body">
-                  <h5 class="card-title">Dashboard View</h5>
-                  <p class="card-text">This screen shows real-time sensor readings including temperature, humidity, soil moisture, and water level with visual indicators and status descriptions.</p>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <div class="card">
-                <img src="/images/history-screenshot.jpg" class="card-img-top" alt="History Screenshot">
-                <div class="card-body">
-                  <h5 class="card-title">History View</h5>
-                  <p class="card-text">Displays historical data trends through interactive charts, allowing users to analyze environmental changes over time.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="row g-4">
-            <div class="col-md-6">
-              <div class="card">
-                <img src="/images/controls-screenshot.jpg" class="card-img-top" alt="Controls Screenshot">
-                <div class="card-body">
-                  <h5 class="card-title">System Controls</h5>
-                  <p class="card-text">Provides manual override controls for pumps and other actuators, with automatic mode scheduling options.</p>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <div class="card">
-                <img src="/images/alerts-screenshot.jpg" class="card-img-top" alt="Alerts Screenshot">
-                <div class="card-body">
-                  <h5 class="card-title">Alerts System</h5>
-                  <p class="card-text">Shows notification history and allows configuration of alert thresholds for each monitored parameter.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- 5. Conclusion -->
         <div class="mission-card mt-5">
           <h4><i class="fas fa-flag-checkered me-2"></i>Conclusion</h4>
@@ -717,9 +691,7 @@
             <div class="developer-card">
               <img src="e15e4f9a-872b-4806-a8ac-9a29837ce0df.jpg" alt="Rogeliza Y. Raras" class="developer-img">
               <h4 class="text-center">Rogeliza Y. Raras</h4>
-              <p class="text-muted text-center">Frontend Developer</p>
-              <p class="text-center">Designed and implemented the dashboard UI and visualization components</p>
-              
+              <p class="text-muted text-center">BSIT 3A</p>
             </div>
           </div>
           
@@ -728,9 +700,8 @@
             <div class="developer-card">
               <img src="4a872129-c8b7-482a-a824-1d9afa7c1e14.jpg" alt="Janna Mae L. Umayat" class="developer-img">
               <h4 class="text-center">Janna Mae L. Umayat</h4>
-              <p class="text-muted text-center">Backend Developer</p>
-              <p class="text-center">Implemented Firebase integration and data processing logic</p>
-            
+              <p class="text-muted text-center">BSIT 3A</p>
+
             </div>
           </div>
           
@@ -739,13 +710,10 @@
             <div class="developer-card">
               <img src="a11728f5-e14b-476b-93ae-5b1523086822.jpg" alt="Christine Lorence H. Bonifacio" class="developer-img">
               <h4 class="text-center">Christine Lorence H. Bonifacio</h4>
-              <p class="text-muted text-center">Hardware Specialist</p>
-              <p class="text-center">Designed and implemented the sensor network and ESP32 integration</p>
-              
+              <p class="text-muted text-center">BSIT 3A</p>
             </div>
           </div>
         </div>
-        
       </div>
     </div>
   </div>
