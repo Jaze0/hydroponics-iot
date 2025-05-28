@@ -219,7 +219,7 @@
     }
     .chart-container {
       position: relative;
-      height: 250px;
+      height: 300px;
       width: 100%;
     }
     .chart-title {
@@ -319,13 +319,18 @@
           document.getElementById("moisture").textContent = data.soil_moisture + " %";
           document.getElementById("soilDesc").textContent = data.soil_status || "Dry";
           
-          // Water Level display
-          const waterLevel = data.water_level === 0 ? "HIGH" : "LOW";
+          // Water Level display - updated to show percentage and status
+          const waterStatus = data.water_level === 0 ? "HIGH" : "LOW";
+          const waterPercent = data.water_level_percent !== undefined ? 
+            data.water_level_percent + "%" : 
+            (data.water_level === 0 ? "100%" : "0%");
+          
           document.getElementById("water").innerHTML = `
-            <span class="status-indicator ${waterLevel === "HIGH" ? 'status-high' : 'status-low'}"></span>
-            ${waterLevel}
+            <span class="status-indicator ${waterStatus === "HIGH" ? 'status-high' : 'status-low'}"></span>
+            ${waterPercent} (${waterStatus})
           `;
-          document.getElementById("waterDesc").textContent = data.water_level_description || "Water level is " + waterLevel;
+          document.getElementById("waterDesc").textContent = 
+            data.water_level_description || `Water level is ${waterStatus}`;
         }
       }).catch(console.error);
     }
@@ -529,17 +534,20 @@
         const snapshot = await get(child(dbRef, `sensor/history`));
         const data = snapshot.val();
         if (data) {
-          let timestamps = Object.keys(data).sort().slice(-10);
+          // Get last 10 timestamps where water_level was recorded
+          let timestamps = Object.keys(data)
+            .filter(ts => data[ts].water_level !== undefined)
+            .sort()
+            .slice(-10);
+          
           const labels = [];
           const values = [];
           
           for (const ts of timestamps) {
             const record = data[ts];
-            if (record && record.water_level !== undefined) {
-              labels.push(formatTimeLabel(record.timestamp));
-              // Convert HIGH=1 (0 in data means HIGH), LOW=0
-              values.push(record.water_level === 0 ? 1 : 0);
-            }
+            labels.push(formatTimeLabel(record.timestamp));
+            // Convert to percentage (0 = HIGH = 100%, 1 = LOW = 0%)
+            values.push(record.water_level === 0 ? 100 : 0);
           }
           
           // Create chart container with title
@@ -547,7 +555,7 @@
           chartContainer.innerHTML = `
             <div class="chart-title">Water Level History</div>
             <div class="chart-subtitle">${getCurrentMonth()} ${new Date().getFullYear()}</div>
-            <div class="optimal-range">Optimal: HIGH</div>
+            <div class="optimal-range">Optimal: 100% (HIGH)</div>
             <canvas></canvas>
           `;
           
@@ -561,7 +569,7 @@
             data: {
               labels,
               datasets: [{
-                label: "WATER LEVEL",
+                label: "WATER LEVEL (%)",
                 data: values,
                 borderColor: "rgba(54, 185, 204, 0.7)",
                 backgroundColor: "rgba(54, 185, 204, 0.1)",
@@ -593,7 +601,7 @@
                 tooltip: {
                   callbacks: {
                     label: function(context) {
-                      return context.parsed.y === 1 ? "HIGH" : "LOW";
+                      return `${context.parsed.y}% (${context.parsed.y === 100 ? "HIGH" : "LOW"})`;
                     }
                   },
                   backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -613,12 +621,11 @@
               },
               scales: {
                 y: {
-                  min: -0.5,
-                  max: 1.5,
+                  min: 0,
+                  max: 100,
                   ticks: {
-                    stepSize: 1,
                     callback: function(value) {
-                      return value === 1 ? "HIGH" : value === 0 ? "LOW" : "";
+                      return value + '%';
                     },
                     font: {
                       family: 'Poppins',
@@ -631,7 +638,7 @@
                   },
                   title: {
                     display: true,
-                    text: 'Status',
+                    text: 'Water Level %',
                     font: {
                       family: 'Poppins',
                       size: 12,
