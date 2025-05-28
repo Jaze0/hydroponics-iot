@@ -319,18 +319,13 @@
           document.getElementById("moisture").textContent = data.soil_moisture + " %";
           document.getElementById("soilDesc").textContent = data.soil_status || "Dry";
           
-          // Water Level display - updated to show percentage and status
-          const waterStatus = data.water_level === 0 ? "HIGH" : "LOW";
-          const waterPercent = data.water_level_percent !== undefined ? 
-            data.water_level_percent + "%" : 
-            (data.water_level === 0 ? "100%" : "0%");
-          
-          document.getElementById("water").innerHTML = `
-            <span class="status-indicator ${waterStatus === "HIGH" ? 'status-high' : 'status-low'}"></span>
-            ${waterPercent} (${waterStatus})
-          `;
-          document.getElementById("waterDesc").textContent = 
-            data.water_level_description || `Water level is ${waterStatus}`;
+// Water Level display - showing only percentage and description from database
+document.getElementById("water").textContent = 
+  data.water_level_percent !== undefined ? 
+    data.water_level_percent + "%" : 
+    "--";
+document.getElementById("waterDesc").textContent = 
+  data.water_level_description || "Water level data not available";
         }
       }).catch(console.error);
     }
@@ -601,7 +596,7 @@
                 tooltip: {
                   callbacks: {
                     label: function(context) {
-                      return `${context.parsed.y}% (${context.parsed.y === 100 ? "HIGH" : "LOW"})`;
+                      return `${context.parsed.y}% (${context.parsed.y === 0 ? "HIGH" : "LOW"})`;
                     }
                   },
                   backgroundColor: 'rgba(0, 0, 0, 0.8)',
