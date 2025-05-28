@@ -319,30 +319,25 @@
           document.getElementById("moisture").textContent = data.soil_moisture + " %";
           document.getElementById("soilDesc").textContent = data.soil_status || "Dry";
           
-// Water Level display - showing only percentage and description from database
-document.getElementById("water").textContent = 
-  data.water_level_percent !== undefined ? 
-    data.water_level_percent + "%" : 
-    "--";
-document.getElementById("waterDesc").textContent = 
-  data.water_level_description || "Water level data not available";
+          // Water Level display - showing only percentage and description from database
+          document.getElementById("water").textContent = 
+            data.water_level_percent !== undefined ? 
+              data.water_level_percent + "%" : 
+              "--";
+          document.getElementById("waterDesc").textContent = 
+            data.water_level_description || "Water level data not available";
         }
       }).catch(console.error);
     }
     
     function formatTimeLabel(timestamp) {
       const date = new Date(timestamp);
-      return date.toLocaleString([], { 
-        month: 'short', 
-        day: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
     
     function getCurrentMonth() {
       const date = new Date();
-      return date.toLocaleString('default', { month: 'long' });
+      return date.toLocaleString('default', { month: 'long' }) + ' ' + date.getFullYear();
     }
     
     async function fetchHistory() {
@@ -391,7 +386,7 @@ document.getElementById("waterDesc").textContent =
           for (const ts of timestamps) {
             const record = data[ts];
             if (record && record[key] !== undefined) {
-              labels.push(formatTimeLabel(record.timestamp));
+              labels.push(record.timestamp);
               values.push(record[key]);
             }
           }
@@ -400,7 +395,6 @@ document.getElementById("waterDesc").textContent =
           const chartContainer = document.getElementById(chartId);
           chartContainer.innerHTML = `
             <div class="chart-title">${title}</div>
-            <div class="chart-subtitle">${getCurrentMonth()} ${new Date().getFullYear()}</div>
             <div class="optimal-range">${optimalRange}</div>
             <canvas></canvas>
           `;
@@ -464,6 +458,15 @@ document.getElementById("waterDesc").textContent =
                   callbacks: {
                     label: function(context) {
                       return `${context.dataset.label}: ${context.parsed.y}${unit}`;
+                    },
+                    title: function(context) {
+                      const date = new Date(context[0].label);
+                      return date.toLocaleString([], { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      });
                     }
                   }
                 }
@@ -497,6 +500,20 @@ document.getElementById("waterDesc").textContent =
                     font: {
                       family: 'Poppins',
                       size: 12
+                    },
+                    callback: function(value, index, values) {
+                      // For the first and last label, show full date and time
+                      if (index === 0 || index === values.length - 1) {
+                        const date = new Date(value);
+                        return date.toLocaleString([], { 
+                          month: 'short', 
+                          day: 'numeric', 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        });
+                      }
+                      // For other labels, just show time
+                      return formatTimeLabel(value);
                     }
                   },
                   grid: {
@@ -504,7 +521,7 @@ document.getElementById("waterDesc").textContent =
                   },
                   title: {
                     display: true,
-                    text: 'Date & Time',
+                    text: getCurrentMonth(), // Show month and year as x-axis title
                     font: {
                       family: 'Poppins',
                       size: 12,
@@ -540,7 +557,7 @@ document.getElementById("waterDesc").textContent =
           
           for (const ts of timestamps) {
             const record = data[ts];
-            labels.push(formatTimeLabel(record.timestamp));
+            labels.push(record.timestamp);
             // Convert to percentage (0 = HIGH = 100%, 1 = LOW = 0%)
             values.push(record.water_level === 0 ? 100 : 0);
           }
@@ -549,7 +566,6 @@ document.getElementById("waterDesc").textContent =
           const chartContainer = document.getElementById("waterChart");
           chartContainer.innerHTML = `
             <div class="chart-title">Water Level History</div>
-            <div class="chart-subtitle">${getCurrentMonth()} ${new Date().getFullYear()}</div>
             <div class="optimal-range">Optimal: 100% (HIGH)</div>
             <canvas></canvas>
           `;
@@ -597,6 +613,15 @@ document.getElementById("waterDesc").textContent =
                   callbacks: {
                     label: function(context) {
                       return `${context.parsed.y}% (${context.parsed.y === 0 ? "HIGH" : "LOW"})`;
+                    },
+                    title: function(context) {
+                      const date = new Date(context[0].label);
+                      return date.toLocaleString([], { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      });
                     }
                   },
                   backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -646,6 +671,20 @@ document.getElementById("waterDesc").textContent =
                     font: {
                       family: 'Poppins',
                       size: 12
+                    },
+                    callback: function(value, index, values) {
+                      // For the first and last label, show full date and time
+                      if (index === 0 || index === values.length - 1) {
+                        const date = new Date(value);
+                        return date.toLocaleString([], { 
+                          month: 'short', 
+                          day: 'numeric', 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        });
+                      }
+                      // For other labels, just show time
+                      return formatTimeLabel(value);
                     }
                   },
                   grid: {
@@ -653,7 +692,7 @@ document.getElementById("waterDesc").textContent =
                   },
                   title: {
                     display: true,
-                    text: 'Date & Time',
+                    text: getCurrentMonth(),
                     font: {
                       family: 'Poppins',
                       size: 12,
