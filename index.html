@@ -217,6 +217,49 @@
         margin-bottom: 1rem;
       }
     }
+    .chart-container {
+      position: relative;
+      height: 250px;
+      width: 100%;
+    }
+    .chart-title {
+      text-align: center;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: var(--dark-color);
+    }
+    .chart-subtitle {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--dark-color);
+      opacity: 0.7;
+      margin-bottom: 15px;
+    }
+    .optimal-range {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      z-index: 10;
+    }
+    .status-indicator {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 5px;
+    }
+    .status-high {
+      background-color: var(--secondary-color);
+    }
+    .status-low {
+      background-color: var(--warning-color);
+    }
   </style>
   <!-- Firebase Modular SDK -->
   <script type="module">
@@ -266,37 +309,72 @@
         if (data) {
           // Temperature display
           document.getElementById("temp").textContent = data.temperature?.toFixed(1) + " °C";
-          document.getElementById("tempDesc").textContent = data.temperature_description || "Warm"; // Default to "Warm" if not provided
+          document.getElementById("tempDesc").textContent = data.temperature_description || "Warm";
           
           // Humidity display
           document.getElementById("humid").textContent = data.humidity?.toFixed(1) + " %";
-          document.getElementById("humDesc").textContent = data.humidity_description || "Heavy Air"; // Default to "Heavy Air" if not provided
+          document.getElementById("humDesc").textContent = data.humidity_description || "Heavy Air";
           
-          // Soil Moisture display (0-50% range from Arduino)
+          // Soil Moisture display
           document.getElementById("moisture").textContent = data.soil_moisture + " %";
-          document.getElementById("soilDesc").textContent = data.soil_status || "Very Dry"; // Default to "Very Dry" if not provided
+          document.getElementById("soilDesc").textContent = data.soil_status || "Dry";
           
-          // Water Level display (matches Arduino output directly)
-          document.getElementById("water").textContent = data.water_level || "--";
-          document.getElementById("waterDesc").textContent = data.water_description || "Water level is " + (data.water_level || "--");
+          // Water Level display
+          const waterLevel = data.water_level === 0 ? "HIGH" : "LOW";
+          document.getElementById("water").innerHTML = `
+            <span class="status-indicator ${waterLevel === "HIGH" ? 'status-high' : 'status-low'}"></span>
+            ${waterLevel}
+          `;
+          document.getElementById("waterDesc").textContent = data.water_level_description || "Water level is " + waterLevel;
         }
       }).catch(console.error);
     }
     
     function formatTimeLabel(timestamp) {
-      const date = new Date(timestamp * 1000);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const date = new Date(timestamp);
+      return date.toLocaleString([], { 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+    }
+    
+    function getCurrentMonth() {
+      const date = new Date();
+      return date.toLocaleString('default', { month: 'long' });
     }
     
     async function fetchHistory() {
       const dbRef = ref(database);
       const paths = [
-        { key: "temperature", color: "rgba(78, 115, 223, 0.7)", chartId: "tempChart", unit: "°C" },
-        { key: "humidity", color: "rgba(28, 200, 138, 0.7)", chartId: "humidChart", unit: "%" },
-        { key: "soil_moisture", color: "rgba(246, 194, 62, 0.7)", chartId: "soilChart", unit: "%" },
+        { 
+          key: "temperature", 
+          color: "rgba(78, 115, 223, 0.7)", 
+          chartId: "tempChart", 
+          unit: "°C",
+          title: "Temperature History",
+          optimalRange: "Optimal: 18-25°C"
+        },
+        { 
+          key: "humidity", 
+          color: "rgba(28, 200, 138, 0.7)", 
+          chartId: "humidChart", 
+          unit: "%",
+          title: "Humidity History",
+          optimalRange: "Optimal: 40-70%"
+        },
+        { 
+          key: "soil_moisture", 
+          color: "rgba(246, 194, 62, 0.7)", 
+          chartId: "soilChart", 
+          unit: "%",
+          title: "Soil Moisture History",
+          optimalRange: "Optimal: 20-40%"
+        },
       ];
       
-      for (const { key, color, chartId, unit } of paths) {
+      for (const { key, color, chartId, unit, title, optimalRange } of paths) {
         try {
           const snapshot = await get(child(dbRef, `sensor/history`));
           const data = snapshot.val();
@@ -313,12 +391,22 @@
           for (const ts of timestamps) {
             const record = data[ts];
             if (record && record[key] !== undefined) {
-              labels.push(formatTimeLabel(parseInt(ts)));
+              labels.push(formatTimeLabel(record.timestamp));
               values.push(record[key]);
             }
           }
           
-          const ctx = document.getElementById(chartId).getContext("2d");
+          // Create chart container with title
+          const chartContainer = document.getElementById(chartId);
+          chartContainer.innerHTML = `
+            <div class="chart-title">${title}</div>
+            <div class="chart-subtitle">${getCurrentMonth()} ${new Date().getFullYear()}</div>
+            <div class="optimal-range">${optimalRange}</div>
+            <canvas></canvas>
+          `;
+          
+          const ctx = chartContainer.querySelector('canvas').getContext("2d");
+          
           // Destroy old chart if exists to prevent duplicates
           if (charts[chartId]) {
             charts[chartId].destroy();
@@ -343,45 +431,19 @@
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              scales: {
-                y: {
-                  beginAtZero: key !== "temperature", // Don't start at zero for temperature
-                  ticks: { 
-                    precision: 0,
-                    font: {
-                      family: 'Poppins',
-                      size: 12
-                    }
-                  },
-                  grid: {
-                    color: 'rgba(0, 0, 0, 0.05)',
-                    drawBorder: false
-                  }
-                },
-                x: {
-                  ticks: {
-                    font: {
-                      family: 'Poppins',
-                      size: 12
-                    }
-                  },
-                  grid: {
-                    display: false
-                  }
-                }
-              },
               plugins: {
-                legend: { 
+                legend: {
                   display: true,
+                  position: 'top',
                   labels: {
                     font: {
                       family: 'Poppins',
-                      size: 13,
+                      size: 12,
                       weight: '500'
                     },
                     boxWidth: 12,
                     boxHeight: 12,
-                    padding: 20,
+                    padding: 10,
                     usePointStyle: true
                   }
                 },
@@ -398,7 +460,57 @@
                   },
                   padding: 10,
                   cornerRadius: 6,
-                  displayColors: false
+                  displayColors: false,
+                  callbacks: {
+                    label: function(context) {
+                      return `${context.dataset.label}: ${context.parsed.y}${unit}`;
+                    }
+                  }
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: key !== "temperature", // Don't start at zero for temperature
+                  ticks: { 
+                    precision: 0,
+                    font: {
+                      family: 'Poppins',
+                      size: 12
+                    }
+                  },
+                  grid: {
+                    color: 'rgba(0, 0, 0, 0.05)',
+                    drawBorder: false
+                  },
+                  title: {
+                    display: true,
+                    text: unit,
+                    font: {
+                      family: 'Poppins',
+                      size: 12,
+                      weight: '500'
+                    }
+                  }
+                },
+                x: {
+                  ticks: {
+                    font: {
+                      family: 'Poppins',
+                      size: 12
+                    }
+                  },
+                  grid: {
+                    display: false
+                  },
+                  title: {
+                    display: true,
+                    text: 'Date & Time',
+                    font: {
+                      family: 'Poppins',
+                      size: 12,
+                      weight: '500'
+                    }
+                  }
                 }
               },
               interaction: {
@@ -424,13 +536,22 @@
           for (const ts of timestamps) {
             const record = data[ts];
             if (record && record.water_level !== undefined) {
-              labels.push(formatTimeLabel(parseInt(ts)));
-              // Convert "HIGH"/"LOW" to 1/0 for charting
-              values.push(record.water_level === "HIGH" ? 1 : 0);
+              labels.push(formatTimeLabel(record.timestamp));
+              // Convert HIGH=1 (0 in data means HIGH), LOW=0
+              values.push(record.water_level === 0 ? 1 : 0);
             }
           }
           
-          const ctx = document.getElementById("waterChart").getContext("2d");
+          // Create chart container with title
+          const chartContainer = document.getElementById("waterChart");
+          chartContainer.innerHTML = `
+            <div class="chart-title">Water Level History</div>
+            <div class="chart-subtitle">${getCurrentMonth()} ${new Date().getFullYear()}</div>
+            <div class="optimal-range">Optimal: HIGH</div>
+            <canvas></canvas>
+          `;
+          
+          const ctx = chartContainer.querySelector('canvas').getContext("2d");
           if (charts["waterChart"]) {
             charts["waterChart"].destroy();
           }
@@ -440,7 +561,7 @@
             data: {
               labels,
               datasets: [{
-                label: "WATER LEVEL (1=HIGH, 0=LOW)",
+                label: "WATER LEVEL",
                 data: values,
                 borderColor: "rgba(54, 185, 204, 0.7)",
                 backgroundColor: "rgba(54, 185, 204, 0.1)",
@@ -453,49 +574,19 @@
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              scales: {
-                y: {
-                  min: -0.5,
-                  max: 1.5,
-                  ticks: {
-                    stepSize: 1,
-                    callback: function(value) {
-                      return value === 1 ? "HIGH" : value === 0 ? "LOW" : "";
-                    },
-                    font: {
-                      family: 'Poppins',
-                      size: 12
-                    }
-                  },
-                  grid: {
-                    color: 'rgba(0, 0, 0, 0.05)',
-                    drawBorder: false
-                  }
-                },
-                x: {
-                  ticks: {
-                    font: {
-                      family: 'Poppins',
-                      size: 12
-                    }
-                  },
-                  grid: {
-                    display: false
-                  }
-                }
-              },
               plugins: {
-                legend: { 
+                legend: {
                   display: true,
+                  position: 'top',
                   labels: {
                     font: {
                       family: 'Poppins',
-                      size: 13,
+                      size: 12,
                       weight: '500'
                     },
                     boxWidth: 12,
                     boxHeight: 12,
-                    padding: 20,
+                    padding: 10,
                     usePointStyle: true
                   }
                 },
@@ -518,6 +609,55 @@
                   padding: 10,
                   cornerRadius: 6,
                   displayColors: false
+                }
+              },
+              scales: {
+                y: {
+                  min: -0.5,
+                  max: 1.5,
+                  ticks: {
+                    stepSize: 1,
+                    callback: function(value) {
+                      return value === 1 ? "HIGH" : value === 0 ? "LOW" : "";
+                    },
+                    font: {
+                      family: 'Poppins',
+                      size: 12
+                    }
+                  },
+                  grid: {
+                    color: 'rgba(0, 0, 0, 0.05)',
+                    drawBorder: false
+                  },
+                  title: {
+                    display: true,
+                    text: 'Status',
+                    font: {
+                      family: 'Poppins',
+                      size: 12,
+                      weight: '500'
+                    }
+                  }
+                },
+                x: {
+                  ticks: {
+                    font: {
+                      family: 'Poppins',
+                      size: 12
+                    }
+                  },
+                  grid: {
+                    display: false
+                  },
+                  title: {
+                    display: true,
+                    text: 'Date & Time',
+                    font: {
+                      family: 'Poppins',
+                      size: 12,
+                      weight: '500'
+                    }
+                  }
                 }
               }
             }
@@ -620,25 +760,25 @@
         <div class="col-lg-6">
           <div class="card">
             <div class="card-header bg-primary text-white"><i class="fas fa-thermometer-half me-2"></i>Temperature</div>
-            <div class="card-body"><canvas id="tempChart" class="history-chart"></canvas></div>
+            <div class="card-body chart-container" id="tempChart"></div>
           </div>
         </div>
         <div class="col-lg-6">
           <div class="card">
             <div class="card-header bg-success text-white"><i class="fas fa-tint me-2"></i>Humidity</div>
-            <div class="card-body"><canvas id="humidChart" class="history-chart"></canvas></div>
+            <div class="card-body chart-container" id="humidChart"></div>
           </div>
         </div>
         <div class="col-lg-6">
           <div class="card">
             <div class="card-header bg-warning text-dark"><i class="fas fa-seedling me-2"></i>Soil Moisture</div>
-            <div class="card-body"><canvas id="soilChart" class="history-chart"></canvas></div>
+            <div class="card-body chart-container" id="soilChart"></div>
           </div>
         </div>
         <div class="col-lg-6">
           <div class="card">
             <div class="card-header bg-info text-white"><i class="fas fa-water me-2"></i>Water Level</div>
-            <div class="card-body"><canvas id="waterChart" class="history-chart"></canvas></div>
+            <div class="card-body chart-container" id="waterChart"></div>
           </div>
         </div>
       </div>
