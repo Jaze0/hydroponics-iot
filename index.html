@@ -217,9 +217,16 @@
         margin-bottom: 1rem;
       }
     }
+    /* Improved Chart Styles */
     .chart-container {
       position: relative;
       height: 300px;
+      width: 100%;
+      margin-bottom: 1rem;
+    }
+    .chart-wrapper {
+      position: relative;
+      height: 100%;
       width: 100%;
     }
     .chart-title {
@@ -227,6 +234,7 @@
       font-weight: 600;
       margin-bottom: 10px;
       color: var(--dark-color);
+      font-size: 1.1rem;
     }
     .chart-subtitle {
       text-align: center;
@@ -259,6 +267,22 @@
     }
     .status-low {
       background-color: var(--warning-color);
+    }
+    /* Ensure charts don't overlap */
+    .history-row {
+      display: flex;
+      flex-wrap: wrap;
+      margin: -0.75rem;
+    }
+    .history-col {
+      flex: 0 0 calc(50% - 1.5rem);
+      margin: 0.75rem;
+      min-width: 0;
+    }
+    @media (max-width: 992px) {
+      .history-col {
+        flex: 0 0 100%;
+      }
     }
   </style>
   <!-- Firebase Modular SDK -->
@@ -349,7 +373,9 @@
           chartId: "tempChart", 
           unit: "°C",
           title: "Temperature History",
-          optimalRange: "Optimal: 18-25°C"
+          optimalRange: "Optimal: 18-25°C",
+          minY: 10,
+          maxY: 40
         },
         { 
           key: "humidity", 
@@ -357,7 +383,9 @@
           chartId: "humidChart", 
           unit: "%",
           title: "Humidity History",
-          optimalRange: "Optimal: 40-70%"
+          optimalRange: "Optimal: 40-70%",
+          minY: 0,
+          maxY: 100
         },
         { 
           key: "soil_moisture", 
@@ -365,11 +393,13 @@
           chartId: "soilChart", 
           unit: "%",
           title: "Soil Moisture History",
-          optimalRange: "Optimal: 20-40%"
+          optimalRange: "Optimal: 20-40%",
+          minY: 0,
+          maxY: 100
         },
       ];
       
-      for (const { key, color, chartId, unit, title, optimalRange } of paths) {
+      for (const { key, color, chartId, unit, title, optimalRange, minY, maxY } of paths) {
         try {
           const snapshot = await get(child(dbRef, `sensor/history`));
           const data = snapshot.val();
@@ -396,7 +426,9 @@
           chartContainer.innerHTML = `
             <div class="chart-title">${title}</div>
             <div class="optimal-range">${optimalRange}</div>
-            <canvas></canvas>
+            <div class="chart-wrapper">
+              <canvas></canvas>
+            </div>
           `;
           
           const ctx = chartContainer.querySelector('canvas').getContext("2d");
@@ -473,7 +505,8 @@
               },
               scales: {
                 y: {
-                  beginAtZero: key !== "temperature", // Don't start at zero for temperature
+                  min: minY,
+                  max: maxY,
                   ticks: { 
                     precision: 0,
                     font: {
@@ -567,7 +600,9 @@
           chartContainer.innerHTML = `
             <div class="chart-title">Water Level History</div>
             <div class="optimal-range">Optimal: 100% (HIGH)</div>
-            <canvas></canvas>
+            <div class="chart-wrapper">
+              <canvas></canvas>
+            </div>
           `;
           
           const ctx = chartContainer.querySelector('canvas').getContext("2d");
@@ -797,29 +832,37 @@
     </div>
     <div id="history" style="display: none;">
       <h4><i class="fas fa-history me-2"></i>Historical Data</h4>
-      <div class="row g-4">
-        <div class="col-lg-6">
-          <div class="card">
+      <div class="history-row">
+        <div class="history-col">
+          <div class="card h-100">
             <div class="card-header bg-primary text-white"><i class="fas fa-thermometer-half me-2"></i>Temperature</div>
-            <div class="card-body chart-container" id="tempChart"></div>
+            <div class="card-body">
+              <div class="chart-container" id="tempChart"></div>
+            </div>
           </div>
         </div>
-        <div class="col-lg-6">
-          <div class="card">
+        <div class="history-col">
+          <div class="card h-100">
             <div class="card-header bg-success text-white"><i class="fas fa-tint me-2"></i>Humidity</div>
-            <div class="card-body chart-container" id="humidChart"></div>
+            <div class="card-body">
+              <div class="chart-container" id="humidChart"></div>
+            </div>
           </div>
         </div>
-        <div class="col-lg-6">
-          <div class="card">
+        <div class="history-col">
+          <div class="card h-100">
             <div class="card-header bg-warning text-dark"><i class="fas fa-seedling me-2"></i>Soil Moisture</div>
-            <div class="card-body chart-container" id="soilChart"></div>
+            <div class="card-body">
+              <div class="chart-container" id="soilChart"></div>
+            </div>
           </div>
         </div>
-        <div class="col-lg-6">
-          <div class="card">
+        <div class="history-col">
+          <div class="card h-100">
             <div class="card-header bg-info text-white"><i class="fas fa-water me-2"></i>Water Level</div>
-            <div class="card-body chart-container" id="waterChart"></div>
+            <div class="card-body">
+              <div class="chart-container" id="waterChart"></div>
+            </div>
           </div>
         </div>
       </div>
